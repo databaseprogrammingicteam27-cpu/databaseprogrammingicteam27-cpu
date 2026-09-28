@@ -48726,7 +48726,7 @@
                                 }
                             this.scheduleOnce(function() {
                                 s.control.playAudio(t.audio_win);
-                                location.reload();
+                                (window.__lbGameOver?window.__lbGameOver(t.total_score||0):location.reload());
                             }, 2.5)
                         }
                         ,
@@ -48762,7 +48762,7 @@
                         o.prototype.addScore = function(t) {
                             var o = Number(this.score_lbl.string);
                             this.total_score || (this.total_score = 0),
-                            this.total_score += t,
+                            this.total_score += t, window.__lbScore = this.total_score,
                             s.control.scrolNum(this.score_lbl, o, this.total_score, .2)
                         }
                         ,
@@ -51914,5 +51914,54 @@
                 }]
             }, {}, ["api", "audio_btn", "auto_play_blink", "blast", "finger", "opt", "score", "blink", "blink_2", "block", "config", "control", "game_over_6", "guide_force", "model", "next", "nexts", "play_audio", "prgs", "scroll_lbl", "shake", "star"]);
         </script>
-    </body>
+    <style id="lb-style">
+#lb-panel{position:fixed;top:8px;left:8px;z-index:9998;pointer-events:none;background:rgba(0,0,0,.4);color:#fff;font:13px/1.5 Helvetica,Arial,sans-serif;padding:6px 10px;border-radius:10px;min-width:130px;text-align:left}
+#lb-panel b.t{display:block;margin-bottom:2px}
+#lb-panel div{display:flex;justify-content:space-between;gap:12px}
+#lb-panel div.me{color:#ffd54a;font-weight:bold}
+</style>
+<script id="lb-script">
+(function(){
+/* === ISI kalau mau leaderboard online bersama (kosongkan = simpan di browser saja) === */
+var CFG={supabaseUrl:"https://pvptlfcvtelzjnpuwlwk.supabase.co",supabaseKey:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2cHRsZmN2dGVsempucHV3bHdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA2MDg5NjAsImV4cCI6MjA4NjE4NDk2MH0.sBbOGrzgR8Cx7zOUdV7MriP0EvA90MPJoclC11x2M-0",table:"scores",top:5};
+var cloud=!!(CFG.supabaseUrl&&CFG.supabaseKey),LS="lb_scores_v1",NK="lb_name",BK="lb_best";
+function ls(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){return null}}
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+var me=ls(NK);if(!me){me="Pemain-"+Math.floor(1000+Math.random()*9000);ls(NK,me)}
+function localList(){try{return JSON.parse(ls(LS)||"[]")}catch(e){return[]}}
+function best(list){var m={};list.forEach(function(r){var k=String(r.name).toLowerCase();if(!m[k]||r.score>m[k].score)m[k]=r});return Object.keys(m).map(function(k){return m[k]}).sort(function(a,b){return b.score-a.score}).slice(0,CFG.top)}
+function hdr(){return{apikey:CFG.supabaseKey,Authorization:"Bearer "+CFG.supabaseKey,"Content-Type":"application/json"}}
+function load(){
+ if(!cloud)return Promise.resolve(best(localList()));
+ return fetch(CFG.supabaseUrl+"/rest/v1/"+CFG.table+"?select=name,score&order=score.desc&limit=100",{headers:hdr()})
+  .then(function(r){if(!r.ok)throw 0;return r.json()}).then(best).catch(function(){return best(localList())});
+}
+function save(score){
+ score=Math.floor(score||0);
+ if(!(score>0)||score<=Number(ls(BK)||0))return Promise.resolve();
+ ls(BK,score);
+ var l=localList();l.push({name:me,score:score});l.sort(function(a,b){return b.score-a.score});ls(LS,JSON.stringify(l.slice(0,50)));
+ if(!cloud)return Promise.resolve();
+ var h=hdr();h.Prefer="return=minimal";
+ return fetch(CFG.supabaseUrl+"/rest/v1/"+CFG.table,{method:"POST",headers:h,keepalive:true,body:JSON.stringify({name:me,score:score})}).catch(function(){});
+}
+var p=document.createElement("div");p.id="lb-panel";document.body.appendChild(p);
+function refresh(){
+ return load().then(function(rows){
+  p.innerHTML='<b class="t">\uD83C\uDFC6 Skor Tertinggi</b>'+(rows.length?rows.map(function(r,i){
+   return '<div'+(r.name===me?' class="me"':'')+'><span>'+(i+1)+'. '+esc(r.name)+'</span><span>'+Number(r.score)+'</span></div>';
+  }).join(""):"<div>Belum ada skor</div>");
+ });
+}
+refresh();
+window.__lbGameOver=function(score){
+ window.__lbScore=score;
+ Promise.race([save(score),new Promise(function(r){setTimeout(r,1500)})]).then(refresh).then(function(){location.reload()});
+};
+function flush(){save(window.__lbScore||0)}
+window.addEventListener("pagehide",flush);
+document.addEventListener("visibilitychange",function(){if(document.visibilityState==="hidden")flush()});
+})();
+</script>
+</body>
 </html>
